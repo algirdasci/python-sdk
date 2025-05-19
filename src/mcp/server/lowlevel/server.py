@@ -491,6 +491,7 @@ class Server(Generic[LifespanResultT]):
         # the initialization lifecycle, but can do so with any available node
         # rather than requiring initialization for each connection.
         stateless: bool = False,
+        timeout: int = 60
     ):
         async with AsyncExitStack() as stack:
             lifespan_context = await stack.enter_async_context(self.lifespan(self))
@@ -504,16 +505,17 @@ class Server(Generic[LifespanResultT]):
             )
 
             async with anyio.create_task_group() as tg:
-                async for message in session.incoming_messages:
-                    logger.debug(f"Received message: {message}")
+                with anyio.move_on_after(timeout) as scope:
+                    async for message in session.incoming_messages:
+                        logger.debug(f"Received message: {message}")
 
-                    tg.start_soon(
-                        self._handle_message,
-                        message,
-                        session,
-                        lifespan_context,
-                        raise_exceptions,
-                    )
+                        tg.start_soon(
+                            self._handle_message,
+                            message,
+                            session,
+                            lifespan_context,
+                            raise_exceptions,
+                        )
 
     async def _handle_message(
         self,
