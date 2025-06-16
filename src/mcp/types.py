@@ -3,6 +3,7 @@ from typing import Annotated, Any, Generic, Literal, TypeAlias, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field, FileUrl, RootModel
 from pydantic.networks import AnyUrl, UrlConstraints
+from typing_extensions import deprecated
 
 """
 Model Context Protocol bindings for Python
@@ -23,6 +24,14 @@ for reference.
 """
 
 LATEST_PROTOCOL_VERSION = "2025-03-26"
+
+"""
+The default negotiated version of the Model Context Protocol when no version is specified.
+We need this to satisfy the MCP specification, which requires the server to assume a
+specific version if none is provided by the client. See section "Protocol Version Header" at
+https://modelcontextprotocol.io/specification
+"""
+DEFAULT_NEGOTIATED_VERSION = "2025-03-26"
 
 ProgressToken = str | int
 Cursor = str
@@ -667,11 +676,14 @@ class EmbeddedResource(BaseModel):
     model_config = ConfigDict(extra="allow")
 
 
+Content = TextContent | ImageContent | AudioContent | EmbeddedResource
+
+
 class PromptMessage(BaseModel):
     """Describes a message returned as part of a prompt."""
 
     role: Role
-    content: TextContent | ImageContent | AudioContent | EmbeddedResource
+    content: Content
     model_config = ConfigDict(extra="allow")
 
 
@@ -787,7 +799,7 @@ class CallToolRequest(Request[CallToolRequestParams, Literal["tools/call"]]):
 class CallToolResult(Result):
     """The server's response to a tool call."""
 
-    content: list[TextContent | ImageContent | AudioContent | EmbeddedResource]
+    content: list[Content]
     isError: bool = False
 
 
@@ -950,13 +962,18 @@ class CreateMessageResult(Result):
     """The reason why sampling stopped, if known."""
 
 
-class ResourceReference(BaseModel):
+class ResourceTemplateReference(BaseModel):
     """A reference to a resource or resource template definition."""
 
     type: Literal["ref/resource"]
     uri: str
     """The URI or URI template of the resource."""
     model_config = ConfigDict(extra="allow")
+
+
+@deprecated("`ResourceReference` is deprecated, you should use `ResourceTemplateReference`.")
+class ResourceReference(ResourceTemplateReference):
+    pass
 
 
 class PromptReference(BaseModel):
@@ -981,7 +998,7 @@ class CompletionArgument(BaseModel):
 class CompleteRequestParams(RequestParams):
     """Parameters for completion requests."""
 
-    ref: ResourceReference | PromptReference
+    ref: ResourceTemplateReference | PromptReference
     argument: CompletionArgument
     model_config = ConfigDict(extra="allow")
 
